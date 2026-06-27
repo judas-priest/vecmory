@@ -101,7 +101,7 @@ export class IntegramClient {
   }
 
   async list() {
-    return this.#request(this.#objUrl('JSON'));
+    return this.#request(this.#objUrl('full=1&JSON'));
   }
 
   async count() {
