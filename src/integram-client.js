@@ -76,7 +76,7 @@ export class IntegramClient {
   }
 
   async get(id) {
-    return this.#request(this.#objUrl(`id=${id}&full=1&JSON`));
+    return this.#request(this.#objUrl(`id=${id}&full=1&JSON=1`));
   }
 
   async update(id, fields) {
