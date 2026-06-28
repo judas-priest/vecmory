@@ -5,13 +5,23 @@ MCP-сервер контекстной памяти для AI-агентов.
 Хранит цепочки `запрос -> ошибка -> решение` как граф с типизированными рёбрами.
 Эмбеддинг локальный (CPU, без внешних API). Данные живут в таблице [Integram](https://integram.io).
 
-## Быстрый старт
+## Установка
 
 ```bash
-npm install vecmory
+# С GitHub напрямую
+npm install judas-priest/vecmory
+
+# Или с пином на конкретный коммит (для стабильности)
+npm install judas-priest/vecmory#0cd238f
+
+# Или клонировать и установить локально
+git clone https://github.com/judas-priest/vecmory.git
+cd vecmory && npm install
 ```
 
-Настройте `.env`:
+## Настройка
+
+Создайте `.env`:
 
 ```env
 VECMORY_BASE_URL=https://ideav.ru
