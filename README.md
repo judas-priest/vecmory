@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="vecmory_preview.svg" alt="VecMory" width="600"/>
+</p>
+
 # VecMory
 
 MCP-сервер контекстной памяти для AI-агентов.
