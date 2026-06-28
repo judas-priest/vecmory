@@ -101,7 +101,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOLS,
 }));
 
+let initPromise = null;
+function ensureInit() {
+  if (!initPromise) initPromise = vm.init();
+  return initPromise;
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  await ensureInit();
   const { name, arguments: args } = request.params;
 
   try {
@@ -135,7 +142,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  await vm.init();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

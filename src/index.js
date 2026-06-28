@@ -43,7 +43,12 @@ export class VecMory {
 
   #parseJson(val, fallback) {
     if (!val) return fallback;
-    try { return JSON.parse(val); } catch { return fallback; }
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback;
+      if (typeof fallback === 'object' && fallback !== null && !Array.isArray(fallback) && typeof parsed !== 'object') return fallback;
+      return parsed;
+    } catch { return fallback; }
   }
 
   async remember(text, meta = {}) {

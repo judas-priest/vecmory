@@ -48,34 +48,25 @@ VECMORY_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
 
 ### Подключение к Claude Code
 
+> **Важно:** Claude Code не пробрасывает `env` из конфига в MCP-серверы ([#11927](https://github.com/anthropics/claude-code/issues/11927)). Используйте bash-wrapper `start-mcp.sh`, который загружает `.env` через `source`.
+
+Добавьте в `~/.claude.json` (секция `mcpServers`):
+
 ```json
 {
   "mcpServers": {
     "vecmory": {
-      "command": "node",
-      "args": ["/path/to/vecmory/src/mcp-server.js"],
-      "env": {
-        "VECMORY_BASE_URL": "https://ideav.ru",
-        "VECMORY_DB": "mem",
-        "VECMORY_TOKEN": "your-token",
-        "VECMORY_TABLE_ID": "724958",
-        "VECMORY_FIELD_TEXT": "724959",
-        "VECMORY_FIELD_VEC": "724960",
-        "VECMORY_FIELD_NEIGHBORS": "724962",
-        "VECMORY_FIELD_CLEANED_QUERY": "724978",
-        "VECMORY_FIELD_DOMAIN": "724980",
-        "VECMORY_FIELD_TOPIC": "724982",
-        "VECMORY_FIELD_ESSENCE": "724984",
-        "VECMORY_FIELD_POPULARITY": "724986",
-        "VECMORY_FIELD_DECAY": "724988",
-        "VECMORY_FIELD_IMPORTANCE": "724990",
-        "VECMORY_FIELD_EDGE_TYPES": "724992",
-        "VECMORY_MODEL": "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
-      }
+      "type": "stdio",
+      "command": "bash",
+      "args": ["/path/to/vecmory/start-mcp.sh"]
     }
   }
 }
 ```
+
+`start-mcp.sh` входит в комплект — загружает `.env` и запускает `src/mcp-server.js`.
+
+Инициализация (auth + загрузка модели эмбеддинга ~90MB) происходит лениво при первом вызове тулзы, не при старте MCP-сервера.
 
 ## MCP-тулзы
 

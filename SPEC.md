@@ -398,25 +398,27 @@ HTTP через `node:fetch` (Node 18+). Минимум зависимостей
 
 ## 14. Этапы реализации
 
-### Этап 1 — MVP
-- [ ] `integram-client.js` — auth, CRUD, execute_report, metadata
-- [ ] `embedder.js` — загрузка модели, embed()
-- [ ] `search.js` — cosine brute-force (клиентский)
-- [ ] `mcp-server.js` — recall, remember, memory_status
-- [ ] Тесты: roundtrip remember→recall, cosine sanity
+### Этап 1 — MVP (DONE)
+- [x] `integram-client.js` — auth (token+xsrf), CRUD (FormData, правильные URL), metadata
+- [x] `embedder.js` — загрузка модели, embed()
+- [x] `search.js` — cosine brute-force (клиентский)
+- [x] `mcp-server.js` — recall, remember, memory_status, forget
+- [x] Тесты: 52 unit-теста + 16 live integration тестов
+- [x] MCP подключение: bash-wrapper (Claude Code env bug workaround)
+- [x] Lazy init: транспорт подключается мгновенно, auth+model при первом вызове
 
-### Этап 2 — граф
-- [ ] `graph.js` — типизированные рёбра, garland()
-- [ ] Автосвязывание при remember (SIMILAR_TO)
+### Этап 2 — граф (DONE)
+- [x] `graph.js` — типизированные рёбра, garland()
+- [x] Автосвязывание при remember (SIMILAR_TO)
 - [ ] FOLLOWED_BY для последовательных записей
-- [ ] forget() с очисткой рёбер
-- [ ] Тесты: garland depth, edge types
+- [x] forget() с очисткой рёбер
+- [x] Тесты: garland depth, edge types
 
-### Этап 3 — decay + batch
-- [ ] `decay.js` — decay(), архивация
-- [ ] `batchImport()` — DATA-формат
-- [ ] `cleaner.js` — очистка текста
-- [ ] Тесты: decay lifecycle, batch import
+### Этап 3 — decay + batch (DONE)
+- [x] `decay.js` — decay(), архивация
+- [x] `batchImport()` — DATA-формат
+- [x] `cleaner.js` — очистка текста
+- [x] Тесты: decay lifecycle, batch import
 
 ### Этап 4 — серверная оптимизация
 - [ ] Формульный отчёт для серверного косинуса (тип 101)
