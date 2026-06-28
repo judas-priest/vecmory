@@ -42,11 +42,13 @@ Claude Code / AI-агент
 ┌─────────────────────────────────┐
 │  Integram PHP-бэкенд             │
 │                                   │
-│  POST /{db}/object/{tableId}     │   _m_new, _m_save, _m_set, _m_del
-│  POST /{db}/object/{tableId}?import=1  │   batch DATA-импорт
+│  POST /{db}/_m_new/{tableId}     │   создание записи
+│  POST /{db}/_m_set/{recordId}    │   обновление записи
+│  POST /{db}/_m_del/{recordId}    │   удаление записи
+│  GET  /{db}/object/{tableId}/    │   чтение записей (JSON_KV)
 │  GET  /{db}/report/{id}?JSON_KV  │   отчёты, формульные колонки
 │  GET  /{db}/metadata/{tableId}   │   схема таблицы
-│  auth                             │   аутентификация, token + xsrf
+│  GET  /{db}/xsrf?JSON=1          │   аутентификация по токену
 └─────────────────────────────────┘
 ```
 
@@ -63,34 +65,35 @@ Claude Code / AI-агент
 ### 2.1. Аутентификация
 
 ```
-POST {baseUrl}/auth
-Body: { login, password }
-Response: { token, xsrfToken }
-Headers для всех запросов: X-Authorization: {token}, X-XSRF-TOKEN: {xsrfToken}
+GET {baseUrl}/{db}/xsrf?JSON=1
+Headers: X-Authorization: {token}
+Response: { _xsrf, token, user, role, id }
 ```
 
+Токен — строка из поля «Токен» (t125) пользователя Integram. Капча не требуется.
+`_xsrf` обязателен для всех POST `_m_*`/`_d_*` операций.
 Автопереподключение при истечении сессии (детекция по HTML login-страницы в ответе).
 
 ### 2.2. CRUD записей
 
-| Операция | HTTP | Endpoint |
-|----------|------|----------|
-| Создать запись | POST | `/{db}/object/{tableId}?_m_new&JSON` |
-| Обновить поля | POST | `/{db}/object/{tableId}?_m_set&id={id}&full=1` |
-| Удалить запись | POST | `/{db}/object/{tableId}?_m_del&id={id}` |
-| Удалить batch | POST | `/{db}/object/{tableId}?_m_del_batch&ids={id1,id2,...}` |
-| Получить запись | GET | `/{db}/object/{tableId}?id={id}&full=1&JSON` |
-| Список записей | GET | `/{db}/object/{tableId}?JSON` |
-| Кол-во записей | GET | `/{db}/object/{tableId}?count&JSON` |
+| Операция | HTTP | Endpoint | Body |
+|----------|------|----------|------|
+| Создать запись | POST | `/{db}/_m_new/{tableId}?JSON=1` | FormData: `token`, `_xsrf`, `up=1`, `t{colId}=value` |
+| Обновить поля | POST | `/{db}/_m_set/{recordId}?JSON=1` | FormData: `token`, `_xsrf`, `t{colId}=value` |
+| Удалить запись | POST | `/{db}/_m_del/{recordId}?JSON=1` | FormData: `token`, `_xsrf` |
+| Получить запись | GET | `/{db}/object/{tableId}/?JSON_KV&F_I={recordId}` | — |
+| Список записей | GET | `/{db}/object/{tableId}/?JSON_KV` | — |
+| Кол-во записей | GET | `/{db}/object/{tableId}/?JSON_KV&_count=` | — |
 
-`full=1` обязателен — без него MEMO-поля обрезаются до 127 символов.
+Формат ответа LIST/GET: `{ object: [{id, val, up, base}], reqs: { recordId: { colId: value } } }`.
+Поля записей в `reqs`, не в `object`. Клиент мержит `reqs[id]` в объект как `t{colId}`.
+Batch delete API нет — удаляем по одному через `_m_del`.
 
-### 2.3. Multiselect (рёбра графа)
+### 2.3. Neighbors (рёбра графа)
 
-| Операция | HTTP | Endpoint |
-|----------|------|----------|
-| Добавить значение | POST | `?_m_set&id={id}` с полем multiselect |
-| Получить значения | GET | через отчёт или `?id={id}&full=1` |
+Поле `neighbors` — MEMO (не MULTISELECT), хранит JSON-массив ID соседей.
+Поле `edge_types` — MEMO, хранит JSON `{ "nodeId": "SIMILAR_TO" }`.
+Обновление: `_m_set/{id}` с `t724962=<JSON>` и `t724992=<JSON>`.
 
 ### 2.4. Batch-импорт (DATA-формат)
 
@@ -176,7 +179,7 @@ GET /{db}/dict?JSON                   — список таблиц
 | `popularity_counter` | NUMBER (13) | Счётчик обращений |
 | `decay_score` | NUMBER (13) | Коэффициент затухания (0.0-1.0) |
 | `importance_weight` | NUMBER (13) | Агрегированный вес важности |
-| `neighbors` | MULTISELECT | Ссылки на соседние узлы (рёбра графа) |
+| `neighbors` | MEMO (12) | JSON-массив ID соседей |
 | `edge_types` | MEMO (12) | JSON: `{ "node_id": "SIMILAR_TO", ... }` |
 
 ---
@@ -191,7 +194,7 @@ GET /{db}/dict?JSON                   — список таблиц
 | `BELONGS_TO` | Принадлежность к проекту/домену | По полю `domain` |
 | `REFERENCES` | Упоминание тех же сущностей | По совпадению `essence` |
 
-Хранение: `neighbors` (multiselect) = список ID соседей,
+Хранение: `neighbors` (MEMO) = JSON-массив ID соседей,
 `edge_types` (MEMO) = JSON `{ "node_id": "тип" }`.
 
 ---
@@ -277,10 +280,9 @@ Pipeline:
 ```env
 # Integram connection
 VECMORY_BASE_URL=https://ideav.ru
-VECMORY_LOGIN=user@example.com
-VECMORY_PASSWORD=...
-VECMORY_DB=my_workspace
-VECMORY_TABLE=mem
+VECMORY_TOKEN=your-token
+VECMORY_DB=mem
+VECMORY_TABLE_ID=724958
 
 # Embedder
 VECMORY_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
@@ -386,7 +388,7 @@ HTTP через `node:fetch` (Node 18+). Минимум зависимостей
 | 5 | Локальный эмбеддер | Важно | s7 — @xenova/transformers |
 | 6 | setNeighborsBulk | Важно | s6 remember pipeline шаг 5-6 |
 | 7 | Суб-отчёты [name] | Важно | s2.8 — описан |
-| 8 | deleteBatch | Желательно | s2.2 — _m_del_batch |
+| 8 | deleteBatch | Желательно | нет batch API — удаляем по одному через _m_del |
 | 9 | Атомарный инкремент | Желательно | s6 touch — read+write (race ok для MVP) |
 | 10 | memoryStatus composite | Мелкое | s6 status — несколько запросов |
 

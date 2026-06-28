@@ -6,7 +6,7 @@ function mockFetch(responses) {
   let callIndex = 0;
   const fn = async (url, opts) => {
     calls.push({ url: url.toString(), opts });
-    const resp = responses[callIndex++] || { ok: true, json: async () => ({}) };
+    const resp = responses[callIndex++] || { ok: true, body: {} };
     return {
       ok: resp.ok ?? true,
       status: resp.status ?? 200,
@@ -40,95 +40,113 @@ describe('IntegramClient', () => {
   });
 
   describe('create', () => {
-    it('sends _m_new with token+xsrf in body, returns id from object[0].id', async () => {
+    it('POSTs to _m_new/{tableId} with FormData, returns id', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: { object: [{ id: '42' }] } },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { id: 42, obj: 42, val: 'hello' } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       const result = await client.create({ t724959: 'hello' });
-      expect(fetchFn.calls[1].url).toContain('_m_new');
-      expect(fetchFn.calls[1].url).toContain('JSON');
+      expect(fetchFn.calls[1].url).toBe('https://ideav.ru/testdb/_m_new/724958?JSON=1');
+      expect(fetchFn.calls[1].opts.method).toBe('POST');
       expect(result.id).toBe('42');
     });
   });
 
   describe('get', () => {
-    it('fetches record with full=1', async () => {
+    it('fetches record with F_I filter, merges reqs into object', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: { id: '1', t724959: 'hi' } },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { object: [{ id: '1', val: 'rec1', up: '1', base: '724958' }], reqs: { '1': { '724959': 'hi', '724980': 'test' } } } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       const result = await client.get('1');
-      expect(fetchFn.calls[1].url).toContain('id=1');
-      expect(fetchFn.calls[1].url).toContain('full=1');
+      expect(fetchFn.calls[1].url).toContain('F_I=1');
+      expect(fetchFn.calls[1].url).toContain('JSON_KV');
       expect(result.t724959).toBe('hi');
+      expect(result.t724980).toBe('test');
+      expect(result.val).toBe('rec1');
+    });
+
+    it('returns null when record not found', async () => {
+      const fetchFn = mockFetch([
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { object: [] } },
+      ]);
+      const client = new IntegramClient({ ...baseConfig, fetchFn });
+      await client.auth();
+      const result = await client.get('999');
+      expect(result).toBeNull();
     });
   });
 
   describe('update', () => {
-    it('sends _m_set with id and token+xsrf in body', async () => {
+    it('POSTs to _m_set/{id} with FormData', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: { ok: true } },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { id: '100', obj: 1 } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       await client.update('1', { t724988: '0.5' });
-      expect(fetchFn.calls[1].url).toContain('_m_set');
-      expect(fetchFn.calls[1].url).toContain('id=1');
+      expect(fetchFn.calls[1].url).toBe('https://ideav.ru/testdb/_m_set/1?JSON=1');
+      expect(fetchFn.calls[1].opts.method).toBe('POST');
     });
   });
 
   describe('delete', () => {
-    it('sends _m_del with id', async () => {
+    it('POSTs to _m_del/{id}', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: { ok: true } },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { id: '724958', obj: 1 } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       await client.delete('1');
-      expect(fetchFn.calls[1].url).toContain('_m_del');
-      expect(fetchFn.calls[1].url).toContain('id=1');
+      expect(fetchFn.calls[1].url).toBe('https://ideav.ru/testdb/_m_del/1?JSON=1');
+      expect(fetchFn.calls[1].opts.method).toBe('POST');
     });
   });
 
   describe('deleteBatch', () => {
-    it('sends _m_del_batch with ids', async () => {
+    it('deletes each id individually', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: { ok: true } },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { obj: 1 } },
+        { body: { obj: 2 } },
+        { body: { obj: 3 } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       await client.deleteBatch(['1', '2', '3']);
-      expect(fetchFn.calls[1].url).toContain('_m_del_batch');
-      expect(fetchFn.calls[1].url).toContain('ids=1,2,3');
+      expect(fetchFn.calls[1].url).toContain('_m_del/1');
+      expect(fetchFn.calls[2].url).toContain('_m_del/2');
+      expect(fetchFn.calls[3].url).toContain('_m_del/3');
     });
   });
 
   describe('list', () => {
-    it('returns array of records', async () => {
+    it('returns array of records with reqs merged', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: [{ id: '1' }, { id: '2' }] },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { object: [{ id: '1', val: 'a' }, { id: '2', val: 'b' }], reqs: { '1': { '724959': 'text1' }, '2': { '724959': 'text2' } } } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       const result = await client.list();
       expect(result).toHaveLength(2);
+      expect(result[0].t724959).toBe('text1');
+      expect(result[1].t724959).toBe('text2');
     });
   });
 
   describe('count', () => {
     it('returns count number', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: { count: 42 } },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: { count: '42' } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
@@ -140,7 +158,7 @@ describe('IntegramClient', () => {
   describe('report', () => {
     it('executes report with filters', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
+        { body: { _xsrf: 'xsrf1' } },
         { body: [{ id: '1', score: 0.95 }] },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
@@ -155,7 +173,7 @@ describe('IntegramClient', () => {
   describe('metadata', () => {
     it('fetches table schema', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
+        { body: { _xsrf: 'xsrf1' } },
         { body: { id: '724958', val: 'VecMoryNodes', reqs: [{ id: '724959', val: 'text', type: '12' }] } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
@@ -167,9 +185,9 @@ describe('IntegramClient', () => {
   });
 
   describe('batchImport', () => {
-    it('sends DATA format via multipart', async () => {
+    it('sends DATA format via multipart FormData', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
+        { body: { _xsrf: 'xsrf1' } },
         { body: { imported: 2 } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
@@ -184,16 +202,16 @@ describe('IntegramClient', () => {
   describe('auto-reauth on session expiry', () => {
     it('re-fetches xsrf when no-auth error returned, max 1 retry', async () => {
       const fetchFn = mockFetch([
-        { body: { _xsrf: 'xsrf1', token: 'tok' } },
-        { body: [{ error: 'No authorization token provided' }] },
-        { body: { _xsrf: 'xsrf2', token: 'tok' } },
-        { body: [{ id: '1' }] },
+        { body: { _xsrf: 'xsrf1' } },
+        { body: 'No authorization token provided' },
+        { body: { _xsrf: 'xsrf2' } },
+        { body: { object: [{ id: '1', val: 'a' }], reqs: {} } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       const result = await client.list();
       expect(fetchFn.calls).toHaveLength(4);
-      expect(result).toEqual([{ id: '1' }]);
+      expect(result).toHaveLength(1);
     });
   });
 });

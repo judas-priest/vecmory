@@ -22,28 +22,11 @@ export class IntegramClient {
     this.#xsrf = data._xsrf;
   }
 
-  #objUrl(params = '') {
-    return `${this.#baseUrl}/${this.#db}/object/${this.#tableId}${params ? '?' + params : ''}`;
-  }
-
   async #request(url, opts = {}, _retried = false) {
-    const isFormData = opts.body instanceof FormData;
     const headers = {
       'X-Authorization': this.#token,
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...opts.headers,
     };
-
-    // Inject token + _xsrf into POST body for _m_* operations
-    if (opts.method === 'POST' && opts.body && !isFormData) {
-      const parsed = typeof opts.body === 'string' ? JSON.parse(opts.body) : { ...opts.body };
-      parsed.token = this.#token;
-      parsed._xsrf = this.#xsrf;
-      opts = { ...opts, body: JSON.stringify(parsed) };
-    } else if (opts.method === 'POST' && isFormData) {
-      opts.body.set('token', this.#token);
-      opts.body.set('_xsrf', this.#xsrf);
-    }
 
     const res = await this.#fetchFn(url, { ...opts, headers });
     const text = await res.text();
@@ -66,47 +49,85 @@ export class IntegramClient {
     }
   }
 
+  #postForm(fields) {
+    const form = new FormData();
+    form.set('token', this.#token);
+    form.set('_xsrf', this.#xsrf);
+    for (const [k, v] of Object.entries(fields)) {
+      form.set(k, v);
+    }
+    return form;
+  }
+
   async create(fields) {
-    const data = await this.#request(this.#objUrl('_m_new&JSON'), {
-      method: 'POST',
-      body: JSON.stringify(fields),
-    });
-    const id = data?.object?.[0]?.id ?? data?.id;
-    return { id, _raw: data };
+    const body = this.#postForm({ up: '1', ...fields });
+    const data = await this.#request(
+      `${this.#baseUrl}/${this.#db}/_m_new/${this.#tableId}?JSON=1`,
+      { method: 'POST', body },
+    );
+    const id = data?.id ?? data?.obj ?? data?.object?.[0]?.id;
+    return { id: String(id), _raw: data };
   }
 
   async get(id) {
-    return this.#request(this.#objUrl(`id=${id}&full=1&JSON=1`));
+    const data = await this.#request(
+      `${this.#baseUrl}/${this.#db}/object/${this.#tableId}/?JSON_KV&F_I=${id}`,
+    );
+    const obj = data?.object?.[0];
+    if (!obj) return null;
+    const reqs = data?.reqs?.[String(id)] || {};
+    return { ...obj, ...this.#prefixReqs(reqs) };
+  }
+
+  #prefixReqs(reqs) {
+    const result = {};
+    for (const [k, v] of Object.entries(reqs)) {
+      result[`t${k}`] = v;
+    }
+    return result;
   }
 
   async update(id, fields) {
-    return this.#request(this.#objUrl(`_m_set&id=${id}&full=1`), {
-      method: 'POST',
-      body: JSON.stringify(fields),
-    });
+    const body = this.#postForm(fields);
+    return this.#request(
+      `${this.#baseUrl}/${this.#db}/_m_set/${id}?JSON=1`,
+      { method: 'POST', body },
+    );
   }
 
   async delete(id) {
-    return this.#request(this.#objUrl(`_m_del&id=${id}`), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
+    const body = this.#postForm({});
+    return this.#request(
+      `${this.#baseUrl}/${this.#db}/_m_del/${id}?JSON=1`,
+      { method: 'POST', body },
+    );
   }
 
   async deleteBatch(ids) {
-    return this.#request(this.#objUrl(`_m_del_batch&ids=${ids.join(',')}`), {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
+    const results = [];
+    for (const id of ids) {
+      results.push(await this.delete(id));
+    }
+    return results;
   }
 
   async list() {
-    return this.#request(this.#objUrl('full=1&JSON'));
+    const data = await this.#request(
+      `${this.#baseUrl}/${this.#db}/object/${this.#tableId}/?JSON_KV`,
+    );
+    const objects = data?.object || [];
+    const reqs = data?.reqs || {};
+    return objects.map(obj => ({
+      ...obj,
+      ...this.#prefixReqs(reqs[obj.id] || {}),
+    }));
   }
 
   async count() {
-    const data = await this.#request(this.#objUrl('count&JSON'));
-    return typeof data === 'object' ? data.count : data;
+    const data = await this.#request(
+      `${this.#baseUrl}/${this.#db}/object/${this.#tableId}/?JSON_KV&_count=`,
+    );
+    return typeof data === 'object' ? Number(data.count) : data;
   }
 
   async report(reportId, filters = {}) {
@@ -121,11 +142,11 @@ export class IntegramClient {
   }
 
   async batchImport(dataContent) {
-    const formData = new FormData();
-    formData.set('bki_file', new Blob([dataContent], { type: 'text/plain' }), 'import.txt');
-    return this.#request(this.#objUrl('JSON&import=1'), {
-      method: 'POST',
-      body: formData,
-    });
+    const form = this.#postForm({});
+    form.set('bki_file', new Blob([dataContent], { type: 'text/plain' }), 'import.txt');
+    return this.#request(
+      `${this.#baseUrl}/${this.#db}/object/${this.#tableId}/?JSON&import=1`,
+      { method: 'POST', body: form },
+    );
   }
 }
