@@ -1,0 +1,42 @@
+MIT License
+
+Copyright (c) 2024–2026 Alexey Semenov (ideav.ru)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+PATENT NOTICE
+
+This software is provided under the MIT License above, which covers the
+source code only.
+
+The underlying data model and graph-based vector search method are protected by:
+  RU 2650032 C1 (priority 2017)
+  US 11138174 B2 (valid until 2038)
+
+The MIT License does not grant any rights under these patents.
+
+If you use this software as-is with your own storage backend, you are
+responsible for ensuring your implementation does not infringe these patents.
+
+If you use this software together with Integram (ideav.ru), patent rights
+are covered by your Integram license agreement.
+
+For standalone patent licensing: alexey.ideav@gmail.com
