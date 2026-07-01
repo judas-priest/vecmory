@@ -64,7 +64,7 @@ export class VecMory {
     const neighbors = findTopK(embedding, corpus, this.#topK);
 
     const fields = {
-      val: text.slice(0, 200),
+      [`t${this.#client.tableId}`]: text.slice(0, 200),
       [f.text]: text,
       [f.cleaned_query]: cleaned,
       [f.vec]: embeddingJson,
@@ -79,6 +79,7 @@ export class VecMory {
     };
     const { id } = await this.#client.create(fields);
 
+    const nodeMap = new Map(allNodes.map(n => [n.id, n]));
     const edgeTypes = {};
     const neighborIds = [];
     for (const { id: nbrId } of neighbors) {
@@ -86,7 +87,7 @@ export class VecMory {
       const edgeType = meta.edgeType || 'SIMILAR_TO';
       edgeTypes[String(nbrId)] = edgeType;
 
-      const nbrNode = await this.#client.get(nbrId);
+      const nbrNode = nodeMap.get(nbrId);
       if (nbrNode) {
         const nbrEdgeTypes = this.#parseJson(nbrNode[f.edge_types], {});
         const nbrNeighbors = this.#parseJson(nbrNode[f.neighbors], []);
@@ -165,7 +166,7 @@ export class VecMory {
         topic: full?.[f.topic] || '',
         essence: full?.[f.essence] || '',
       };
-    });
+    }).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
     const garlandText = garlandNodes.map(g => `[${g.edgeType}] ${g.text}`).join(' -> ');
 

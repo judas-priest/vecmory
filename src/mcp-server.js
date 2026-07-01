@@ -72,6 +72,7 @@ const TOOLS = [
         domain: { type: 'string', description: 'Category: integrations, infra, project_X, etc.' },
         topic: { type: 'string', description: 'Type: bug_fix, feature_request, question' },
         essence: { type: 'array', items: { type: 'string' }, description: '1-3 keywords' },
+        edgeType: { type: 'string', description: 'Edge type: SIMILAR_TO (default), CAUSED_BY, FOLLOWED_BY, BELONGS_TO, REFERENCES' },
       },
       required: ['text'],
     },
@@ -122,6 +123,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           domain: args.domain,
           topic: args.topic,
           essence: args.essence,
+          edgeType: args.edgeType,
         });
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
