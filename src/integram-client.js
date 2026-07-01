@@ -14,6 +14,8 @@ export class IntegramClient {
     this.#fetchFn = fetchFn || globalThis.fetch;
   }
 
+  get tableId() { return this.#tableId; }
+
   async auth() {
     const res = await this.#fetchFn(`${this.#baseUrl}/${this.#db}/xsrf?JSON=1`, {
       headers: { 'X-Authorization': this.#token },
@@ -112,14 +114,38 @@ export class IntegramClient {
   }
 
   async list() {
-    const data = await this.#request(
-      `${this.#baseUrl}/${this.#db}/object/${this.#tableId}/?JSON_KV`,
-    );
-    const objects = data?.object || [];
-    const reqs = data?.reqs || {};
-    return objects.map(obj => ({
+    const PAGE_SIZE = 200;
+    const seenIds = new Set();
+    const allObjects = [];
+    const allReqs = {};
+
+    for (let pg = 1; ; pg++) {
+      const data = await this.#request(
+        `${this.#baseUrl}/${this.#db}/object/${this.#tableId}/?JSON_KV&LIMIT=${PAGE_SIZE}&pg=${pg}`,
+      );
+      const objects = data?.object || [];
+      const reqs = data?.reqs || {};
+
+      // Merge reqs from this page
+      Object.assign(allReqs, reqs);
+
+      // Deduplicate by id and collect objects
+      let newCount = 0;
+      for (const obj of objects) {
+        if (!seenIds.has(obj.id)) {
+          seenIds.add(obj.id);
+          allObjects.push(obj);
+          newCount++;
+        }
+      }
+
+      // Stop when page is empty
+      if (objects.length === 0) break;
+    }
+
+    return allObjects.map(obj => ({
       ...obj,
-      ...this.#prefixReqs(reqs[obj.id] || {}),
+      ...this.#prefixReqs(allReqs[obj.id] || {}),
     }));
   }
 

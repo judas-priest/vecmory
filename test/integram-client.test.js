@@ -132,6 +132,7 @@ describe('IntegramClient', () => {
       const fetchFn = mockFetch([
         { body: { _xsrf: 'xsrf1' } },
         { body: { object: [{ id: '1', val: 'a' }, { id: '2', val: 'b' }], reqs: { '1': { '724959': 'text1' }, '2': { '724959': 'text2' } } } },
+        { body: { object: [], reqs: {} } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
@@ -139,6 +140,31 @@ describe('IntegramClient', () => {
       expect(result).toHaveLength(2);
       expect(result[0].t724959).toBe('text1');
       expect(result[1].t724959).toBe('text2');
+      expect(fetchFn.calls[1].url).toContain('LIMIT=200');
+      expect(fetchFn.calls[1].url).toContain('pg=1');
+    });
+
+    it('paginates until empty page, deduplicates by id', async () => {
+      const fetchFn = mockFetch([
+        { body: { _xsrf: 'xsrf1' } },
+        // page 1: 2 records
+        { body: { object: [{ id: '1', val: 'a' }, { id: '2', val: 'b' }], reqs: { '1': { '724959': 'text1' }, '2': { '724959': 'text2' } } } },
+        // page 2: 1 record + duplicate of id '2' from page 1
+        { body: { object: [{ id: '2', val: 'b' }, { id: '3', val: 'c' }], reqs: { '2': { '724959': 'text2' }, '3': { '724959': 'text3' } } } },
+        // page 3: empty — signals end
+        { body: { object: [], reqs: {} } },
+      ]);
+      const client = new IntegramClient({ ...baseConfig, fetchFn });
+      await client.auth();
+      const result = await client.list();
+      // 3 unique records despite duplicate id '2' on page 2
+      expect(result).toHaveLength(3);
+      expect(result.map(r => r.id)).toEqual(['1', '2', '3']);
+      expect(result[2].t724959).toBe('text3');
+      // should have fetched pg=1, pg=2, pg=3
+      expect(fetchFn.calls[1].url).toContain('pg=1');
+      expect(fetchFn.calls[2].url).toContain('pg=2');
+      expect(fetchFn.calls[3].url).toContain('pg=3');
     });
   });
 
@@ -206,11 +232,12 @@ describe('IntegramClient', () => {
         { body: 'No authorization token provided' },
         { body: { _xsrf: 'xsrf2' } },
         { body: { object: [{ id: '1', val: 'a' }], reqs: {} } },
+        { body: { object: [], reqs: {} } },
       ]);
       const client = new IntegramClient({ ...baseConfig, fetchFn });
       await client.auth();
       const result = await client.list();
-      expect(fetchFn.calls).toHaveLength(4);
+      expect(fetchFn.calls).toHaveLength(5);
       expect(result).toHaveLength(1);
     });
   });
