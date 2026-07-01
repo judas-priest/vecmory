@@ -73,7 +73,7 @@ VECMORY_MODEL=Xenova/paraphrase-multilingual-MiniLM-L12-v2
 | Тулза | Параметры | Что делает |
 |-------|-----------|------------|
 | `recall` | `query`, `k?` | Семантический поиск + обход графа соседей (garland) |
-| `remember` | `text`, `domain?`, `topic?`, `essence?` | Записать факт/решение в память |
+| `remember` | `text`, `domain?`, `topic?`, `essence?`, `edgeType?` | Записать факт/решение в память |
 | `forget` | `nodeId` | Удалить узел и очистить рёбра |
 | `memory_status` | — | Статистика: total, withNeighbors, avgDegree, byDomain |
 
@@ -126,7 +126,7 @@ Claude Code / AI-агент
 |-----|-----------------|
 | `SIMILAR_TO` | Автоматически при записи (top-k по косинусу) |
 | `CAUSED_BY` | Явно при записи |
-| `FOLLOWED_BY` | Следующий запрос в сессии |
+| `FOLLOWED_BY` | Автоматически между последовательными `remember()` в сессии |
 | `BELONGS_TO` | По полю `domain` |
 | `REFERENCES` | По совпадению `essence` |
 
@@ -139,7 +139,8 @@ Claude Code / AI-агент
 3. Поиск top-k соседей по косинусу
 4. Создание записи в Integram
 5. Добавление рёбер SIMILAR_TO (forward + backward)
-6. Return `{ id, neighbors, scores }`
+6. Добавление ребра FOLLOWED_BY к предыдущей записи сессии
+7. Return `{ id, neighbors, scores }`
 
 ### recall(query, k?)
 
@@ -178,8 +179,12 @@ src/
   graph.js              — рёбра, garland, обход
   decay.js              — затухание, архивация
   cleaner.js            — очистка текста
+hooks/
+  pre-recall.sh         — хук UserPromptSubmit → авто-recall
+  post-remember.sh      — хук Stop → авто-remember
+start-mcp.sh            — bash-wrapper (загружает .env)
 test/
-  *.test.js             — 52 теста
+  *.test.js             — 72 теста
 ```
 
 ## Зависимости
@@ -193,10 +198,10 @@ HTTP через `globalThis.fetch` (Node 18+). Минимум зависимос
 
 ## Roadmap
 
-- [ ] Серверный косинус через формульные колонки Integram (тип 101)
-- [ ] RECURSIVE-отчёт для серверного графа
-- [ ] Суб-отчёты для пайплайна cosine → graph
-- [ ] Claude Code хуки (auto-recall, auto-remember)
+- [x] Claude Code хуки (auto-recall, auto-remember)
+- [x] FOLLOWED_BY автосвязывание последовательных записей
+- [ ] Серверный косинус через формульные колонки Integram (тип 101) — research done, формула работает
+- [ ] RECURSIVE-отчёт для серверного графа — заблокирован (neighbors=MEMO, не ref)
 - [ ] A/B тестирование «с памятью / без»
 
 ## Лицензия

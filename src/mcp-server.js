@@ -42,6 +42,8 @@ const vm = new VecMory({
   garlandDepth: parseInt(env.VECMORY_GARLAND_DEPTH || '2', 10),
   decayRate: parseFloat(env.VECMORY_DECAY_RATE || '0.95'),
   decayThreshold: parseFloat(env.VECMORY_DECAY_THRESHOLD || '0.1'),
+  cosineReportId: env.VECMORY_COSINE_REPORT_ID || null,
+  cosineScoreColId: env.VECMORY_COSINE_SCORE_COL_ID || null,
 });
 
 const server = new Server(

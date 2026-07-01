@@ -163,6 +163,69 @@ export class IntegramClient {
     return this.#request(`${this.#baseUrl}/${this.#db}/report/${reportId}?JSON_KV${filterStr}`);
   }
 
+  async createRecord(typeId, fields) {
+    const body = this.#postForm({ up: '1', ...fields });
+    const data = await this.#request(
+      `${this.#baseUrl}/${this.#db}/_m_new/${typeId}?JSON=1`,
+      { method: 'POST', body },
+    );
+    return { id: String(data?.id ?? data?.obj), _raw: data };
+  }
+
+  async createReport({ name, fromTableId, vecFieldId, textFieldId }) {
+    const REPORT_TYPE = 22;
+    const COLUMN_TYPE = 28;
+    const FROM_TYPE = 44;
+
+    const rep = await this.createRecord(REPORT_TYPE, { [`t${REPORT_TYPE}`]: name });
+    const reportId = rep.id;
+
+    await this.createRecord(FROM_TYPE, { [`t${FROM_TYPE}`]: String(fromTableId), up: reportId });
+
+    const idCol = await this.createRecord(COLUMN_TYPE, { [`t${COLUMN_TYPE}`]: String(textFieldId), up: reportId });
+    await this.update(idCol.id, { t100: 'node_id', t104: '85' });
+
+    const vecCol = await this.createRecord(COLUMN_TYPE, { [`t${COLUMN_TYPE}`]: String(vecFieldId), up: reportId });
+    await this.update(vecCol.id, { t100: 'vec_raw', t107: '1' });
+
+    const scoreCol = await this.createRecord(COLUMN_TYPE, { [`t${COLUMN_TYPE}`]: '0', up: reportId });
+    await this.update(scoreCol.id, { t100: 'score', t101: '0' });
+
+    const textCol = await this.createRecord(COLUMN_TYPE, { [`t${COLUMN_TYPE}`]: String(textFieldId), up: reportId });
+    await this.update(textCol.id, { t100: 'text' });
+
+    await this.update(reportId, { t264: 'score DESC', t134: '16' });
+
+    return { reportId, scoreColId: scoreCol.id };
+  }
+
+  async cosineSearch(reportId, scoreColId, queryVec, topK, vecFieldId) {
+    const vecAlias = `a${vecFieldId || this.#tableId + 2}`;
+    const q = "'";
+    const parts = [];
+    for (let i = 0; i < queryVec.length; i++) {
+      const v = queryVec[i].toFixed(4);
+      if (v === '0.0000' || v === '-0.0000') continue;
+      parts.push(`CAST(JSON_EXTRACT(${vecAlias}.val,${q}$[${i}]${q}) AS DOUBLE)*${v}`);
+    }
+    const formula = parts.join('+') || '0';
+
+    // Integram MEMO fields can hold large formulas but SQL has practical limits (~30KB)
+    if (formula.length > 30000) return null;
+
+    await this.update(scoreColId, { t101: formula });
+    if (topK) await this.update(reportId, { t134: String(topK) });
+
+    const result = await this.report(reportId);
+    if (!Array.isArray(result) || result[0]?.error) return null;
+
+    return result.map(r => ({
+      id: String(r.node_id),
+      score: parseFloat(r.score) || 0,
+      text: r.text || '',
+    }));
+  }
+
   async metadata() {
     return this.#request(`${this.#baseUrl}/${this.#db}/metadata/${this.#tableId}?JSON=1`);
   }

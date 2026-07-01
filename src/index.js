@@ -27,7 +27,10 @@ export class VecMory {
   #decayThreshold;
   #lastRememberedId = null;
 
-  constructor({ client, embedder, fields, topK = 16, garlandDepth = 2, decayRate = 0.95, decayThreshold = 0.1 }) {
+  #cosineReportId = null;
+  #cosineScoreColId = null;
+
+  constructor({ client, embedder, fields, topK = 16, garlandDepth = 2, decayRate = 0.95, decayThreshold = 0.1, cosineReportId, cosineScoreColId }) {
     this.#client = client;
     this.#embedder = embedder;
     this.#f = fields || DEFAULT_FIELDS;
@@ -35,6 +38,8 @@ export class VecMory {
     this.#garlandDepth = garlandDepth;
     this.#decayRate = decayRate;
     this.#decayThreshold = decayThreshold;
+    this.#cosineReportId = cosineReportId || null;
+    this.#cosineScoreColId = cosineScoreColId || null;
   }
 
   async init() {
@@ -52,17 +57,37 @@ export class VecMory {
     } catch { return fallback; }
   }
 
+  get #useServerCosine() {
+    return this.#cosineReportId && this.#cosineScoreColId;
+  }
+
+  async #serverSearch(embedding, topK) {
+    const vecFieldId = this.#f.vec.replace('t', '');
+    const results = await this.#client.cosineSearch(
+      this.#cosineReportId, this.#cosineScoreColId,
+      embedding, topK, vecFieldId,
+    );
+    if (!results) return null;
+    return results.map(r => ({ id: r.id, score: r.score }));
+  }
+
   async remember(text, meta = {}) {
     const f = this.#f;
     const cleaned = cleanText(text);
     const embedding = await this.#embedder.embed(cleaned);
     const embeddingJson = JSON.stringify(Array.from(embedding));
 
-    const allNodes = await this.#client.list();
-    const corpus = allNodes
-      .filter(n => n[f.vec])
-      .map(n => ({ id: n.id, embedding: new Float32Array(this.#parseJson(n[f.vec], [])) }));
-    const neighbors = findTopK(embedding, corpus, this.#topK);
+    let allNodes, neighbors;
+    if (this.#useServerCosine) {
+      neighbors = await this.#serverSearch(embedding, this.#topK) || [];
+      allNodes = await this.#client.list();
+    } else {
+      allNodes = await this.#client.list();
+      const corpus = allNodes
+        .filter(n => n[f.vec])
+        .map(n => ({ id: n.id, embedding: new Float32Array(this.#parseJson(n[f.vec], [])) }));
+      neighbors = findTopK(embedding, corpus, this.#topK);
+    }
 
     const fields = {
       [`t${this.#client.tableId}`]: text.slice(0, 200),
@@ -135,12 +160,18 @@ export class VecMory {
     const cleaned = cleanText(query);
     const queryEmbedding = await this.#embedder.embed(cleaned);
 
+    let topResults;
     const allNodes = await this.#client.list();
     const nodeMap = new Map(allNodes.map(n => [n.id, n]));
-    const corpus = allNodes
-      .filter(n => n[f.vec])
-      .map(n => ({ id: n.id, embedding: new Float32Array(this.#parseJson(n[f.vec], [])) }));
-    const topResults = findTopK(queryEmbedding, corpus, topK);
+
+    if (this.#useServerCosine) {
+      topResults = await this.#serverSearch(queryEmbedding, topK) || [];
+    } else {
+      const corpus = allNodes
+        .filter(n => n[f.vec])
+        .map(n => ({ id: n.id, embedding: new Float32Array(this.#parseJson(n[f.vec], [])) }));
+      topResults = findTopK(queryEmbedding, corpus, topK);
+    }
 
     const garlandNodes = [];
     const seenIds = new Set(topResults.map(r => r.id));
