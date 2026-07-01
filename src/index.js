@@ -25,6 +25,7 @@ export class VecMory {
   #garlandDepth;
   #decayRate;
   #decayThreshold;
+  #lastRememberedId = null;
 
   constructor({ client, embedder, fields, topK = 16, garlandDepth = 2, decayRate = 0.95, decayThreshold = 0.1 }) {
     this.#client = client;
@@ -100,11 +101,31 @@ export class VecMory {
       }
     }
 
+    // FOLLOWED_BY: link to previous remember in this session
+    if (this.#lastRememberedId) {
+      const prevId = this.#lastRememberedId;
+      if (!neighborIds.includes(prevId)) neighborIds.push(prevId);
+      edgeTypes[String(prevId)] = 'FOLLOWED_BY';
+
+      const prevNode = nodeMap.get(prevId);
+      if (prevNode) {
+        const prevNeighbors = this.#parseJson(prevNode[f.neighbors], []);
+        const prevEdgeTypes = this.#parseJson(prevNode[f.edge_types], {});
+        if (!prevNeighbors.includes(id)) prevNeighbors.push(id);
+        prevEdgeTypes[String(id)] = 'FOLLOWED_BY';
+        await this.#client.update(prevId, {
+          [f.neighbors]: JSON.stringify(prevNeighbors),
+          [f.edge_types]: JSON.stringify(prevEdgeTypes),
+        });
+      }
+    }
+
     await this.#client.update(id, {
       [f.neighbors]: JSON.stringify(neighborIds),
       [f.edge_types]: JSON.stringify(edgeTypes),
     });
 
+    this.#lastRememberedId = id;
     return { id, neighbors: neighborIds, scores: neighbors.map(n => n.score) };
   }
 
